@@ -1,4 +1,6 @@
 import math
+from numbers import Number
+
 import numpy as np
 from Orange import data
 
@@ -132,6 +134,8 @@ class Discrete(np.ndarray):
                 index = (self.row_variable.to_val(index[0]), index[1])
             if isinstance(index[1], str):
                 index = (index[0], self.col_variable.to_val(index[1]))
+        elif isinstance(index, Number):
+            index = int(index)
         result = super().__getitem__(index)
         if result.strides:
             result.col_variable = self.col_variable
@@ -146,6 +150,8 @@ class Discrete(np.ndarray):
                 index = (self.row_variable.to_val(index[0]), index[1])
             if isinstance(index[1], str):
                 index = (index[0], self.col_variable.to_val(index[1]))
+        elif isinstance(index, Number):
+            index = int(index)
         super().__setitem__(index, value)
 
 

@@ -1,7 +1,7 @@
 import random
 import zlib
 import math
-from numbers import Real
+from numbers import Real, Number
 import numpy as np
 from Orange import data
 
@@ -95,12 +95,16 @@ class Discrete(np.ndarray):
     def __getitem__(self, index):
         if isinstance(index, str):
             index = self.variable.to_val(index)
+        elif isinstance(index, Number):
+            index = int(index)
         return super().__getitem__(index)
 
 
     def __setitem__(self, index, value):
         if isinstance(index, str):
             index = self.variable.to_val(index)
+        elif isinstance(index, Number):
+            index = int(index)
         super().__setitem__(index, value)
 
 
