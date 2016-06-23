@@ -1,15 +1,27 @@
+#cython: boundscheck=False
+#cython: wraparound=False
+#cython: initializedcheck=False
+#cython: cdivision=True
+#cython: embedsignature=True
+#cython: language_level=3
+
 from hashlib import sha1
-from cython import boundscheck, cdivision
+from cython cimport floating, integral
 import numpy as np
 cimport numpy as np
 from libc.stdlib cimport rand, srand, RAND_MAX
 
 
-cdef inline bint isnan(np.float_t x) nogil:
+ctypedef fused numeric:
+    integral
+    floating
+
+
+cdef inline bint isnan(numeric x) nogil:
     return x != x
 
 
-def argmaxrnd(np.ndarray vec, object random_seed=None):
+def argmaxrnd(numeric[:] vec, object random_seed=None):
 
     """
     Returns the index of the maximum value for a given 1D array.
@@ -37,23 +49,14 @@ def argmaxrnd(np.ndarray vec, object random_seed=None):
         else:
             srand(hash(random_seed) & 0xffffffff)
 
-    cdef:
-        np.dtype dtype = vec.dtype
-    if dtype == np.float_:
-        return argmaxrnd_float(vec)
-    elif dtype == np.int_:
-        return argmaxrnd_int(vec)
-    else:
-        raise ValueError("dtype {} not supported.".format(dtype))
+    return _argmaxrnd(vec)
 
 
-@boundscheck(False)
-@cdivision(True)
-cdef Py_ssize_t argmaxrnd_float(np.ndarray[np.float_t, ndim=1] vec):
+cdef Py_ssize_t _argmaxrnd(numeric[:] vec):
     cdef:
         Py_ssize_t i, m_i
         int c = 0
-        np.float_t curr, m
+        numeric curr, m
 
     for i in range(vec.shape[0]):
         curr = vec[i]
@@ -66,25 +69,4 @@ cdef Py_ssize_t argmaxrnd_float(np.ndarray[np.float_t, ndim=1] vec):
                 c += 1
                 if 1 + <int>(1.0 * c * rand() / RAND_MAX) == c:
                     m_i = i
-    return m_i
-
-
-@boundscheck(False)
-@cdivision(True)
-cdef Py_ssize_t argmaxrnd_int(np.ndarray[np.int_t, ndim=1] vec):
-    cdef:
-        Py_ssize_t i, m_i = 0
-        int c = 1
-        np.int_t curr, m = vec[0]
-
-    for i in range(1, vec.shape[0]):
-        curr = vec[i]
-        if curr > m:
-            m = curr
-            c = 1
-            m_i = i
-        elif curr == m:
-            c += 1
-            if 1 + <int>(1.0 * c * rand() / RAND_MAX) == c:
-                m_i = i
     return m_i
