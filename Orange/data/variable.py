@@ -33,6 +33,9 @@ class VariableMeta(Registry):
         return obj
 
 
+_STR_METHODS = {i for i in dir(str) if not i.startswith('_')}
+
+
 class Variable(str, metaclass=VariableMeta):
     """
     The base class for variable descriptors contains the variable's
@@ -79,6 +82,19 @@ class Variable(str, metaclass=VariableMeta):
             else:
                 self._all_vars[name] = self
         self._colors = None
+
+    def __dir__(self):
+        """Hide parent (str) methods so they don't autocomplete"""
+        return list(set(super().__dir__()) - _STR_METHODS)
+
+    def __getattribute__(self, item):
+        """Prevent access to parent (str) methods"""
+        if item in _STR_METHODS:
+            raise AttributeError("Variables shouldn't be used as strings. "
+                                 "If you have a convincing use case for a "
+                                 "particular attribute / method, perhaps "
+                                 "consider making an exception for it.")
+        return super().__getattribute__(item)
 
     def make_proxy(self):
         """Copy the variable and set the master to `self.master` or to `self`.
