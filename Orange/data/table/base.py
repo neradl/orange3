@@ -663,29 +663,39 @@ class TableBase:
 
     @property
     def X(self):
-        """Return a read-only 2D numpy array of X.
-
-        The columns are in the same order as the columns in Table.domain.attributes.
+        """Return a read-only 2D numpy array of X (attributes, features).
 
         Returns
         -------
-        np.ndarray
+        X : np.ndarray
+            The columns are in the same order as the columns in
+            Table.domain.attributes.
         """
         return self._to_numpy(X=True)
 
     @property
     def Y(self):
-        """Return a read-only numpy array of Y.
-
-        If there is only one column, a one-dimensional array is returned. Otherwise 2D.
-        The columns are in the same order as the columns in Table.domain.class_vars.
+        """Return a read-only numpy array of all class variables.
 
         Returns
         -------
-        np.ndarray
+        Y : np.ndarray
+            2D array with one column per class variable. The columns are
+            in the same order as the variables in Table.domain.class_vars.
         """
-        result = self._to_numpy(Y=True)
-        return result[:, 0] if result.shape[1] == 1 else result
+        return self._to_numpy(Y=True)
+
+    @property
+    def y(self):
+        """Return a read-only numpy array of first class' values.
+
+        Returns
+        -------
+        y : np.ndarray
+            1D array of the first class' (i.e. Table.domain.class_var's) values.
+        """
+        Y = self.Y()
+        return Y[:, 0] if Y.shape[1] else Y.ravel()
 
     @property
     def metas(self):
@@ -1336,6 +1346,7 @@ class SeriesBase:
     _to_numpy = TableBase._to_numpy
     X = TableBase.X
     Y = TableBase.Y
+    y = TableBase.y
     metas = TableBase.metas
     weights = w = TableBase.weights
 
