@@ -679,6 +679,7 @@ class OWWidget(QDialog, Report, ProgressBarMixin, WidgetMessagesMixin,
 
         self.__msgwidget.setWidget(self)
         self.__msgwidget.show()
+        self.__msgwidget.raise_()
 
     def __quicktip(self):
         messages = list(self.UserAdviceMessages)
