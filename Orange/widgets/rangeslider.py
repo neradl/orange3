@@ -145,9 +145,11 @@ class RangeSlider(QSlider):
             self.__click_offset = pos
         else:
             if self.__active_slider == 0:
-                self.__min_position = max(self.minimum(), min(pos, self.__max_position - 1))
+                self.__min_position = max(self.minimum(), pos)
+                self.__max_position = min(self.maximum(), max(self.__max_position, self.__min_position + 1))
             else:
-                self.__max_position = min(self.maximum(), max(pos, self.__min_position + 1))
+                self.__max_position = min(self.maximum(), pos)
+                self.__min_position = max(self.minimum(), min(self.__min_position, self.__max_position - 1))
 
         self.update()
         self.slidersMoved.emit(self.__min_position, self.__max_position)
