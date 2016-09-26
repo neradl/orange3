@@ -1,9 +1,12 @@
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
-# from PyQt4 import QtCore
-# from PyQt4.QtGui import *
-# from PyQt4.QtCore import *
+import numpy as np
+from scipy.stats import gaussian_kde
+
+# from PyQt5.QtCore import *
+# from PyQt5.QtGui import *
+# from PyQt5.QtWidgets import *
+from PyQt4 import QtCore
+from PyQt4.QtGui import *
+from PyQt4.QtCore import *
 
 
 def _INVALID(*args):
@@ -90,6 +93,17 @@ class RangeSlider(QSlider):
             opt.sliderValue = position
             painter.drawComplexControl(QStyle.CC_Slider, opt)
 
+    def _hitTestHandle(self, option, position):
+        """Replaces QStyle.hitTestComplexControl in mousePressEvent().
+
+        Return True if handle was pressed.
+        Override this in subclasses that don't use the default groove/handles.
+
+        This is used because PyQt<5.5 doesn't expose QProxyStyle.
+        """
+        return self.style().hitTestComplexControl(
+            QStyle.CC_Slider, option, position, self) == QStyle.SC_SliderHandle
+
     def mouseReleaseEvent(self, event):
         self.__pressed_control = QStyle.SC_None
         if not self.hasTracking():
@@ -101,19 +115,15 @@ class RangeSlider(QSlider):
             return
 
         event.accept()
-        style = self.style()
-
         opt = QStyleOptionSlider()
         self.initStyleOption(opt)
-
         self.__active_slider = -1
 
         for i, value in enumerate((self.__min_position, self.__max_position)):
             opt.sliderPosition = value
-            hit = style.hitTestComplexControl(style.CC_Slider, opt, event.pos(), self)
-            if hit == style.SC_SliderHandle:
+            if self._hitTestHandle(opt, event.pos()):
                 self.__active_slider = i
-                self.__pressed_control = hit
+                self.__pressed_control = QStyle.SC_SliderHandle
 
                 self.triggerAction(self.SliderMove)
                 self.setRepeatAction(self.SliderNoAction)
@@ -123,7 +133,7 @@ class RangeSlider(QSlider):
             # If the user clicks the groove between the handles, the whole
             # interval is moved
             self.__pressed_control = QStyle.SC_SliderGroove
-            self.__click_offset = self.__pixelPosToRangeValue(self.__pick(event.pos()))
+            self.__click_offset = self._pixelPosToRangeValue(self._pick(event.pos()))
             self.triggerAction(self.SliderMove)
             self.setRepeatAction(self.SliderNoAction)
 
@@ -136,7 +146,7 @@ class RangeSlider(QSlider):
         event.accept()
         opt = QStyleOptionSlider()
         self.initStyleOption(opt)
-        pos = self.__pixelPosToRangeValue(self.__pick(event.pos()))
+        pos = self._pixelPosToRangeValue(self._pick(event.pos()))
 
         if self.__active_slider < 0:
             offset = pos - self.__click_offset
@@ -159,16 +169,25 @@ class RangeSlider(QSlider):
         if self.hasTracking():
             self.setValues(self.__min_position, self.__max_position)
 
-    def __pick(self, pt):
+    def _pick(self, pt):
         return pt.x() if self.orientation() == Qt.Horizontal else pt.y()
 
-    def __pixelPosToRangeValue(self, pos):
+    def _subControlRect(self, subcontrol):
+        """Replaces QStyle.subControlRect() in _pixelPosToRangeValue().
+
+        Return QRect for subcontrol which is one of
+        QStyle.SC_SliderGrove or QStyle.SC_SliderHandle.
+        Override this in subclasses that don't use the default groove/handles.
+
+        This is used because PyQt<5.5 doesn't expose QProxyStyle.
+        """
         opt = QStyleOptionSlider()
         self.initStyleOption(opt)
-        style = self.style()
+        return self.style().subControlRect(QStyle.CC_Slider, opt, subcontrol, self)
 
-        groove = style.subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderGroove, self)
-        handle = style.subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderHandle, self)
+    def _pixelPosToRangeValue(self, pos):
+        groove = self._subControlRect(QStyle.SC_SliderGroove)
+        handle = self._subControlRect(QStyle.SC_SliderHandle)
 
         if self.orientation() == Qt.Horizontal:
             slider_length = handle.width()
@@ -179,9 +198,9 @@ class RangeSlider(QSlider):
             slider_min = groove.y()
             slider_max = groove.bottom() - slider_length + 1
 
-        return style.sliderValueFromPosition(
+        return QStyle.sliderValueFromPosition(
             self.minimum(), self.maximum(), pos - slider_min,
-            slider_max - slider_min, opt.upsideDown)
+            slider_max - slider_min, self.invertedAppearance())
 
     def values(self):
         return self.__min_value, self.__max_value
@@ -223,22 +242,164 @@ class RangeSlider(QSlider):
         self.update()
 
 
+class ViolinSlider(RangeSlider):
+    _HANDLE_WIDTH = 3
+    _HANDLE_COLOR = Qt.red
+
+    _pixmap = None
+    _show_text = True
+
+    def pixmap(self):
+        return self._pixmap
+
+    def setPixmap(self, pixmap):
+        assert pixmap is None or isinstance(pixmap, QPixmap)
+        self._pixmap = pixmap
+        self.update()
+
+    def showText(self):
+        return self._showText
+
+    def setShowText(self, showText):
+        self._showText = showText
+
+    def setHistogram(self, values, bins=None, use_kde=False):
+        """Set background histogram (density estimation, violin plot)"""
+        if values is None or not len(values):
+            self.setPixmap(None)
+            return
+        if bins is None:
+            bins = min(100, max(10, len(values) // 20))
+        if use_kde:
+            hist = gaussian_kde(values,
+                                None if isinstance(use_kde, bool) else use_kde)(
+                np.linspace(np.min(values), np.max(values), bins))
+        else:
+            hist = np.histogram(values, bins)[0]
+        hist = hist / hist.max()
+
+        HEIGHT = self.rect().height() / 2
+        OFFSET = HEIGHT * .3
+        pixmap = QPixmap(QSize(len(hist), 2 * (HEIGHT + OFFSET)))  # +1 avoids right/bottom frame border shadow
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setPen(QPen(Qt.darkGray))
+        for x, value in enumerate(hist):
+            painter.drawLine(x, HEIGHT * (1 - value) + OFFSET,
+                             x, HEIGHT * (1 + value) + OFFSET)
+
+        if self.orientation() != Qt.Horizontal:
+            pixmap = pixmap.transformed(QTransform().rotate(-90))
+
+        self.setPixmap(pixmap)
+
+    def _hitTestHandle(self, option, position):
+        pos = self._pixelPosToRangeValue(self._pick(position))
+        delta = min(10, max(5, (self.maximum() - self.minimum()) // 25))
+        return option.sliderPosition in range(pos - delta, pos + delta + 1)
+
+    def _subControlRect(self, subcontrol):
+        if subcontrol == QStyle.SC_SliderGroove:
+            return self.rect()
+        if subcontrol == QStyle.SC_SliderHandle:
+            if self.orientation() == Qt.Horizontal:
+                return QRect(-self._HANDLE_WIDTH / 2, 0, self._HANDLE_WIDTH, self.rect().height())
+            else:
+                return QRect(0, -self._HANDLE_WIDTH / 2, self.rect().width(), self._HANDLE_WIDTH)
+
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        rect = self._subControlRect(QStyle.SC_SliderGroove)
+        is_horizontal = self.orientation() == Qt.Horizontal
+
+        minpos, maxpos = self.minimumPosition(), self.maximumPosition()
+        span = rect.width() if is_horizontal else rect.height()
+        x1 = QStyle.sliderPositionFromValue(
+            self.minimum(), self.maximum(), minpos, span, self.invertedAppearance())
+        x2 = QStyle.sliderPositionFromValue(
+            self.minimum(), self.maximum(), maxpos, span, self.invertedAppearance())
+
+        # Background
+        painter.fillRect(rect, Qt.white)
+
+        # Highlight
+        painter.setOpacity(.7)
+        if is_horizontal:
+            painter.fillRect(x1, rect.y(), x2 - x1, rect.height(), Qt.yellow)
+        else:
+            painter.fillRect(rect.x(), x1, rect.width(), x2 - x1, Qt.yellow)
+        painter.setOpacity(1)
+
+        # Histogram
+        if self._pixmap:
+            painter.drawPixmap(rect, self._pixmap, self._pixmap.rect())
+
+        # Frame
+        painter.setPen(QPen(QBrush(Qt.darkGray), 2))
+        painter.drawRect(rect)
+
+        # Handles
+        painter.setPen(QPen(QBrush(self._HANDLE_COLOR), self._HANDLE_WIDTH))
+        painter.setOpacity(9)
+        if is_horizontal:
+            painter.drawLine(x1, rect.y(), x1, rect.y() + rect.height())
+            painter.drawLine(x2, rect.y(), x2, rect.y() + rect.height())
+        else:
+            painter.drawLine(rect.x(), x1, rect.x() + rect.width(), x1)
+            painter.drawLine(rect.x(), x2, rect.x() + rect.width(), x2)
+        painter.setOpacity(1)
+
+        if self._show_text:
+            painter.setFont(QFont('sans-serif', 7, QFont.Bold))
+            strMin, strMax = self.formatValues(minpos, maxpos)
+            widthMin = painter.fontMetrics().width(strMin)
+            widthMax = painter.fontMetrics().width(strMax)
+            height = painter.fontMetrics().height()
+            is_enough_space = x2 - x1 > 2 + (max(widthMax, widthMin)
+                                             if is_horizontal else
+                                             (2 * height + self._HANDLE_WIDTH))
+            if is_enough_space:
+                if is_horizontal:
+                    painter.drawText(x1 + 3, rect.y() + height - 2, strMin)
+                    painter.drawText(x2 - widthMax - 1, rect.y() + rect.height() - 2, strMax)
+                else:
+                    painter.drawText(rect.x() + 1, x1 + height, strMin)
+                    painter.drawText(rect.x() + rect.width() - widthMax - 1, x2 - 2, strMax)
+
+    def formatValues(self, valueMin, valueMax):
+        """Format the int values into strings that are shown if showText is True."""
+        return str(valueMin), str(valueMax)
+
+
 if __name__ == "__main__":
     app = QApplication([])
     win = QDialog()
-    hbox = QHBoxLayout(win)
-    win.setLayout(hbox)
-    label = QLabel('Slider:', win)
-    slider = RangeSlider(win,
-                         orientation=Qt.Horizontal,
-                         minimum=0,
-                         maximum=100,
-                         tickInterval=5,
-                         minimumValue=10,
-                         maximumValue=90,
-                         slidersMoved=print,
-                         )
-    hbox.addWidget(label)
-    hbox.addWidget(slider)
+    grid = QGridLayout(win)
+    win.setLayout(grid)
+    kwargs = dict(
+        minimum=0,
+        maximum=100,
+        tickInterval=5,
+        minimumValue=20,
+        maximumValue=80,
+        slidersMoved=print
+    )
+    grid.addWidget(QLabel('RangeSlider:', win), 0, 0)
+    grid.addWidget(RangeSlider(win, orientation=Qt.Horizontal, **kwargs), 0, 1)
+
+    grid.addWidget(QLabel('RangeSlider:', win), 1, 0)
+    grid.addWidget(RangeSlider(win, orientation=Qt.Vertical, **kwargs), 1, 1)
+
+    grid.addWidget(QLabel('ViolinSlider:', win), 2, 0)
+    slider = ViolinSlider(win, orientation=Qt.Horizontal, **kwargs)
+    from Orange.data import Table
+    data = Table('iris')
+    values = data.X[:, 0]
+    slider.setHistogram(values)
+    grid.addWidget(slider, 2, 1)
+
+    grid.addWidget(QLabel('ViolinSlider:', win), 3, 0)
+    grid.addWidget(ViolinSlider(win, orientation=Qt.Vertical, **kwargs), 3, 1)
+
     win.show()
     app.exec()
