@@ -248,6 +248,7 @@ class ViolinSlider(RangeSlider):
 
     _pixmap = None
     _show_text = True
+    _histogram = None
 
     def pixmap(self):
         return self._pixmap
@@ -263,20 +264,28 @@ class ViolinSlider(RangeSlider):
     def setShowText(self, showText):
         self._showText = showText
 
-    def setHistogram(self, values, bins=None, use_kde=False):
-        """Set background histogram (density estimation, violin plot)"""
-        if values is None or not len(values):
+    def setHistogram(self, values=None, bins=None, use_kde=False, histogram=None):
+        """ Set background histogram (or density estimation, violin plot)
+
+        The histogram of bins is calculated from values, optionally as a
+        Gaussian KDE. If histogram is provided, its values are used directly
+        and other parameters are ignored.
+        """
+        if (values is None or not len(values)) and histogram is None:
             self.setPixmap(None)
             return
-        if bins is None:
-            bins = min(100, max(10, len(values) // 20))
-        if use_kde:
-            hist = gaussian_kde(values,
-                                None if isinstance(use_kde, bool) else use_kde)(
-                np.linspace(np.min(values), np.max(values), bins))
+        if histogram is not None:
+            self._histogram = hist = histogram
         else:
-            hist = np.histogram(values, bins)[0]
-        hist = hist / hist.max()
+            if bins is None:
+                bins = min(100, max(10, len(values) // 20))
+            if use_kde:
+                hist = gaussian_kde(values,
+                                    None if isinstance(use_kde, bool) else use_kde)(
+                    np.linspace(np.min(values), np.max(values), bins))
+            else:
+                hist = np.histogram(values, bins)[0]
+            self._histogram = hist = hist / hist.max()
 
         HEIGHT = self.rect().height() / 2
         OFFSET = HEIGHT * .3
@@ -292,6 +301,13 @@ class ViolinSlider(RangeSlider):
             pixmap = pixmap.transformed(QTransform().rotate(-90))
 
         self.setPixmap(pixmap)
+
+    def resizeEvent(self, event):
+        is_horizontal = self.orientation() == Qt.Horizontal
+        if (self._histogram is not None and
+            (is_horizontal and event.size().height() > event.oldSize().height() or
+             is_horizontal and event.size().width() > event.oldSize().width())):
+            self.setHistogram(histogram=self._histogram)
 
     def _hitTestHandle(self, option, position):
         pos = self._pixelPosToRangeValue(self._pick(position))
