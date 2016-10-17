@@ -213,13 +213,13 @@ class OWMap(widget.OWWidget):
 
     autocommit = settings.Setting(True)
     tile_provider = settings.Setting('Black and white')
-    lat_attr = settings.Setting('')
-    lon_attr = settings.Setting('')
-    class_attr = settings.Setting('')
-    color_attr = settings.Setting('')
-    label_attr = settings.Setting('')
-    shape_attr = settings.Setting('')
-    size_attr = settings.Setting('')
+    lat_attr = settings.ContextSetting('')
+    lon_attr = settings.ContextSetting('')
+    class_attr = settings.ContextSetting('')
+    color_attr = settings.ContextSetting('')
+    label_attr = settings.ContextSetting('')
+    shape_attr = settings.ContextSetting('')
+    size_attr = settings.ContextSetting('')
     opacity = settings.Setting(100)
     zoom = settings.Setting(100)
     jittering = settings.Setting(0)
@@ -389,6 +389,8 @@ class OWMap(widget.OWWidget):
     def set_data(self, data):
         self.data = data
 
+        self.closeContext()
+
         if data is None:
             return self.clear()
 
@@ -434,11 +436,19 @@ class OWMap(widget.OWWidget):
         else:
             self.Warning.data_sampled.clear()
 
+        self.openContext(data)
+
+        self.map.set_marker_color(self.color_attr)
+        self.map.set_marker_label(self.label_attr)
+        self.map.set_marker_shape(self.shape_attr)
+        self.map.set_marker_size(self.size_attr)
+
+    def handleNewSignals(self):
+        super().handleNewSignals()
         self.train_model()
 
     def set_learner(self, learner):
         self.learner = learner
-        self.train_model()
 
     def train_model(self):
         model = None
