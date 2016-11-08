@@ -551,3 +551,66 @@ $(document).ready(function() {
     setTimeout(function() { map.on('moveend', reset_heatmap); }, 100);
     setTimeout(function() { map.on('moveend', redraw_markers_overlay_image); }, 100);
 });
+
+
+var legendControl = L.control({position: 'topright'}),
+    legend_colors = [],
+    legend_shapes = [],
+    legend_sizes = [];
+legendControl.onAdd = function () {
+    if (legend_colors.length +
+        legend_shapes.length +
+        legend_sizes.length == 0)
+        return L.DomUtil.create('span');
+
+    var div = L.DomUtil.create('div', 'legend');
+
+    if (legend_colors.length) {
+        var box = L.DomUtil.create('div', 'legend-box', div);
+        box.innerHTML += '<h3>Color</h3><hr/>';
+        if (legend_colors[0] == 'c') {
+            box.innerHTML += L.Util.template(
+                '<table class="colors">' +  // I'm sorry
+                '<tr><td rowspan="2" style="width:2em; background:linear-gradient({colors})"></td><td> {minval}</td></tr>' +
+                '<tr><td> {maxval}</td></tr>' +
+                '</table>', {
+                    minval: legend_colors[1][0],
+                    maxval: legend_colors[1][1],
+                    colors: legend_colors[2].join(',')
+                });
+        } else {
+            var str = '';
+            for (var i=0; i<legend_colors[1].length; ++i)
+                str += L.Util.template(
+                    '<div><div class="legend-icon" style="background:{color}">&nbsp;</div> {value}</div>', {
+                        color: legend_colors[2][i],
+                        value: legend_colors[1][i]});
+            box.innerHTML += str;
+        }
+    }
+
+    if (legend_shapes.length) {
+        var box = L.DomUtil.create('div', 'legend-box', div);
+        var str = '';
+        for (var i=0; i<legend_shapes.length; ++i)
+            str += L.Util.template(
+                '<div><img class="legend-icon" style="vertical-align:middle" src="{shape}"/> {value}</div>', {
+                    shape: _construct_icon(i, '#555'),
+                    value: legend_shapes[i]});
+        box.innerHTML = '<h3>Shape</h3><hr/>' + str;
+    }
+
+    if (legend_sizes.length) {
+        var box = L.DomUtil.create('div', 'legend-box', div);
+        box.innerHTML += '<h3>Size</h3><hr/>' + L.Util.template(
+            '<table class="sizes">' +  // I'm sorry
+            '<tr><td rowspan="2"><img src="legend-sizes-indicator.svg"></td><td> {minval}</td></tr>' +
+            '<tr><td> {maxval}</td></tr>' +
+            '</table>', {
+                minval: legend_sizes[0],
+                maxval: legend_sizes[1],
+            });
+    }
+
+    return div;
+};
