@@ -603,7 +603,7 @@ class OWMap(widget.OWWidget):
             label='Symbol size:', labelFormat=' %d%%',
             callback=_set_zoom)
         self._jittering = gui.valueSlider(
-            box, self, 'jittering', label='Jittering', values=(0, .5, 1, 2, 5),
+            box, self, 'jittering', label='Jittering:', values=(0, .5, 1, 2, 5),
             labelFormat=' %.1f%%', ticks=True,
             callback=_set_jittering)
         self._clustering_check = gui.checkBox(
