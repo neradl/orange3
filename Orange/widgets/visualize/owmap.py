@@ -103,7 +103,7 @@ class LeafletMap(WebviewWidget):
         else:
             self._selected_indices = None
         self.selectionChanged.emit(indices.nonzero()[0].tolist())
-        self.evalJS('redraw_markers_overlay_image();')
+        self.redraw_markers_overlay_image(new_image=True)
 
     def set_map_provider(self, provider):
         self.evalJS('set_map_provider("{}");'.format(provider))
@@ -401,20 +401,26 @@ class LeafletMap(WebviewWidget):
                       repeat((0xff, 0, 0)))
             sizes = self._sizes[batch] if self._size_attr else repeat(10)
 
-            zipped = zip(x, y, batch_selected, colors, sizes)
-            sortkey, penkey, brushkey = itemgetter(2, 3, 4), itemgetter(2), itemgetter(3, 4)
+            zipped = zip(x, y, batch_selected, sizes, colors)
+            sortkey, penkey, sizekey, brushkey = itemgetter(2, 3, 4), itemgetter(2), itemgetter(3), itemgetter(4)
             for is_selected, points in groupby(sorted(zipped, key=sortkey),
                                                key=penkey):
-                pensize, pencolor = (3, Qt.green) if is_selected else (.7, QColor(0, 0, 0, self._opacity))
-                painter.setPen(QPen(QBrush(pencolor), pensize))
-
-                for (color, size), points in groupby(points, key=brushkey):
-                    color = tuple(color) + (self._opacity,)
-                    painter.setBrush(QBrush(QColor(*color)))
-                    size = size * self._size_coef + pensize
+                for size, points in groupby(points, key=sizekey):
+                    pensize, pencolor = ((3, Qt.green) if is_selected else
+                                         (.7, QColor(0, 0, 0, self._opacity)))
+                    size *= self._size_coef
+                    if size < 5:
+                        pensize /= 3
+                    size += pensize
                     size2 = size / 2
-                    for x, y, *_ in points:
-                        painter.drawEllipse(x - size2, y - size2, size, size)
+                    painter.setPen(Qt.NoPen if size < 5 and not is_selected else
+                                   QPen(QBrush(pencolor), pensize))
+
+                    for color, points in groupby(points, key=brushkey):
+                        color = tuple(color) + (self._opacity,)
+                        painter.setBrush(QBrush(QColor(*color)))
+                        for x, y, *_ in points:
+                            painter.drawEllipse(x - size2, y - size2, size, size)
 
             im.save(self._overlay_image_path, 'PNG')
             self.evalJS('markersImageLayer.setUrl("{}#{}"); 0;'
