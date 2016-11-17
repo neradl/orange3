@@ -600,7 +600,7 @@ class OWMap(widget.OWWidget):
             callback=_set_opacity)
         self._zoom_slider = gui.valueSlider(
             box, self, 'zoom', None, values=(20, 50, 100, 200, 500, 1000),
-            label='Zoom:', labelFormat=' %d%%',
+            label='Symbol size:', labelFormat=' %d%%',
             callback=_set_zoom)
         self._jittering = gui.valueSlider(
             box, self, 'jittering', label='Jittering', values=(0, .5, 1, 2, 5),
